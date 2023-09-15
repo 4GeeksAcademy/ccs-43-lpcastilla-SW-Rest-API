@@ -200,129 +200,108 @@ def get_all_planets():
 
 # Rutas de favorites
 
-@app.route('/favorites/planets/<int:user_id>', methods=['POST'])  
-def create_favorite_planet(user_id):
-    body = request.json
-    user = body.get("user")
-    planet = Planets.query.get(user_id)
-
-    if planet is None:
+@app.route('/users/favorites/<int:id>', methods=['GET'])
+def get_user_favorites(id):
+    if id is None:
         return jsonify({
-            "message": "Planet not found"
-        }), 404
-
-    favorite = Favorites.query.filter_by(id_planets=planet.id).one_or_none()
-    if favorite is not None:
-        return jsonify({
-            "message": "Planet is already a favorite"
+            "message": "id is required"
         }), 400
 
-    new_favorite = Favorites(id_planets=planet.id)
-    try:
-        db.session.add(new_favorite)
-        db.session.commit()
-    except Exception as error:
-        db.session.rollback()
+    user = User.query.filter_by(id=id).first()
+    if not user:
         return jsonify({
-            "message": "Internal error"
-        }), 500
-
-    return jsonify({
-        "message": "Planet added to favorites"
-    }), 201
-
-
-@app.route('/favorites/people/<int:people_id>', methods=['POST'])  
-def create_favorite_people(people_id):
-    people = People.query.get(people_id)
-
-    if people is None:
-        return jsonify({
-            "message": "People not found"
+            "message": "User not found"
         }), 404
 
-    favorite = Favorites.query.filter_by(id_people=people.id).one_or_none()
-    if favorite is not None:
+    favorites = Favorites.query.filter_by(id_user=user.id).all()
+    serialized_favorites = [favorite.serialize() for favorite in favorites]
+    return jsonify(serialized_favorites), 200
+
+
+
+
+@app.route('/favorite/planet/<int:planet_id>', methods=['POST'])
+def add_favorite_planet(planet_id):
+    if planet_id is None:
         return jsonify({
-            "message": "People is already a favorite"
+            "message": "id is required"
         }), 400
+    
+    user_id = request.args.get('user_id')
 
-    new_favorite = Favorites(id_people=people.id)
+    existing_favorite = Favorites.query.filter_by(id_user=user_id, id_planets=planet_id).first()
+    if existing_favorite:
+        return jsonify({"message": "El planeta ya es un favorito"}), 400
+
+    new_favorite = Favorites(id_user=user_id, id_planets=planet_id)
+    db.session.add(new_favorite)
+
     try:
-        db.session.add(new_favorite)
         db.session.commit()
-    except Exception as error:
+        return jsonify({"message": "Planeta añadido a favoritos"}), 201
+    except Exception as e:
         db.session.rollback()
-        return jsonify({
-            "message": "Internal error"
-        }), 500
+        return jsonify({"message": "Error interno"}), 500
 
-    return jsonify({
-        "message": "People added to favorites"
-    }), 201
 
+
+@app.route('/favorite/people/<int:people_id>', methods=['POST'])
+def add_favorite_people(people_id):
+    user_id = request.args.get('user_id')
+
+    existing_favorite = Favorites.query.filter_by(id_user=user_id, id_people=people_id).first()
+    if existing_favorite:
+        return jsonify({"message": "La persona ya es un favorito"}), 400
+
+    new_favorite = Favorites(id_user=user_id, id_people=people_id)
+    db.session.add(new_favorite)
+
+    try:
+        db.session.commit()
+        return jsonify({"message": "Persona añadida a favoritos"}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error interno"}), 500
 
 # Rutas de Delete
 
-@app.route('/favorites/people/id', methods=['DELETE'])  
-def delete_favorite_people(people_id):
-    people = People.query.get(people_id)
-
-    if people is None:
-        return jsonify({
-            "message": "People not found"
-        }), 404
-
-    favorite = Favorites.query.filter_by(id_people=people.id).one_or_none()
-    if favorite is None:
-        return jsonify({
-            "message": "People is not in favorites"
-        }), 400
-
-    try:
-        db.session.delete(favorite)
-        db.session.commit()
-    except Exception as error:
-        db.session.rollback()
-        return jsonify({
-            "message": "Internal error"
-        }), 500
-
-    return jsonify({
-        "message": "People removed from favorites"
-    }), 200
-
-
-@app.route('/favorites/planets/<int:planet_id>', methods=['DELETE'])  
+@app.route('/favorite/planet/<int:planet_id>', methods=['DELETE'])
 def delete_favorite_planet(planet_id):
-    planet = Planets.query.get(planet_id)
+    user_id = request.args.get('user_id')
 
-    if planet is None:
-        return jsonify({
-            "message": "Planet not found"
-        }), 404
+    favorite = Favorites.query.filter_by(id_user=user_id, id_planets=planet_id).first()
+    if not favorite:
+        return jsonify({"message": "El planeta no es un favorito"}), 400
 
-    favorite = Favorites.query.filter_by(id_planets=planet.id).one_or_none()
-    if favorite is None:
-        return jsonify({
-            "message": "Planet is not in favorites"
-        }), 400
+    db.session.delete(favorite)
 
     try:
-        db.session.delete(favorite)
         db.session.commit()
-    except Exception as error:
+        return jsonify({"message": "Planeta eliminado de favoritos"}), 200
+    except Exception as e:
         db.session.rollback()
-        return jsonify({
-            "message": "Internal error"
-        }), 500
+        return jsonify({"message": "Error interno"}), 500
 
-    return jsonify({
-        "message": "Planet removed from favorites"
-    }), 200
+
+@app.route('/favorite/people/<int:people_id>', methods=['DELETE'])
+def delete_favorite_people(people_id):
+    user_id = request.args.get('user_id')
+
+    favorite = Favorites.query.filter_by(id_user=user_id, id_people=people_id).first()
+    if not favorite:
+        return jsonify({"message": "La persona no es un favorito"}), 400
+
+    db.session.delete(favorite)
+
+    try:
+        db.session.commit()
+        return jsonify({"message": "Persona eliminada de favoritos"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error interno"}), 500
+
 
     
-
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
